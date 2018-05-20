@@ -10,6 +10,7 @@
 #include <sys/ipc.h>
 #include <sys/sem.h>
 #include <time.h>
+#include <string.h>
 #include "cola_procesos.h"
 
 #if defined(__GNU_LIBRARY__) && !defined(_SEM_SEMUN_UNDEFINED)
@@ -253,12 +254,7 @@ void estado_procesos(){
 		exit (0);
 	}
 	
-	//printf("%c\n", Memoria_principal[1].estado);
-	//Memoria_secundaria[0].estado
-	//aumentarSemaforo(0) //Signal secundaria
-	//aumentarSemaforo(1) //Signal principal
-	//esperarSemaforo(0) //Wait secundaria
-	//esperarSemaforo(1) //Wait principal
+
 	char buffer_menu[2];
 	printf("\nIngrese 1 si desea obtener el estado de la memoria");
 	printf("\nIngrese 2 si desea obtener el estado de los procesos\n");
@@ -267,6 +263,11 @@ void estado_procesos(){
 	while((strcmp("1", buffer_menu) == 0) || (strcmp("2", buffer_menu) == 0)){
 		if(Memoria_secundaria[0].cancelado == 1){
 			printf("\nEl finalizador ya ha sido ejecutado\n");
+			
+			if (Id_Memoria_principal != -1 && Id_Memoria_secundaria != -1){
+				shmdt ((char *)Memoria_principal);
+				shmdt ((char *)Memoria_secundaria);
+			}
 			exit(0);
 		}else{
 			if(strcmp("1", buffer_menu) == 0){	
@@ -285,12 +286,10 @@ void estado_procesos(){
 		}
 	}
 	
-	//desasociar memoria compartida de la zona de datos del programa
-	/*if (Id_Memoria_principal != -1 && Id_Memoria_secundaria != -1){
-		shmdt ((char *)Memoria_principal);
-		shmdt ((char *)Memoria_secundaria);
-	}*/
-	
-	
+	if (Id_Memoria_principal != -1 && Id_Memoria_secundaria != -1){
+				shmdt ((char *)Memoria_principal);
+				shmdt ((char *)Memoria_secundaria);
+	}
+			
 	return 0;
 }
