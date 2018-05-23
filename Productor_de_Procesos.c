@@ -53,7 +53,7 @@ pthread_mutex_t mutex;
 //pthread_mutex_unlock(&mutex);
 
 FILE *log_file;
-char nombre_archivo[] = "log_file.txt";//"C:\\home\\log_file.txt";
+char nombre_archivo[] = "log_file.txt";
 
 
 /*
@@ -91,32 +91,14 @@ void esperarSemaforo(int indice_semaforo){
 	semop (Id_Semaforo, &Operacion, 1);
 }
 
-//busca la cantidad de paginas indicada por parametro, las asgina al pid de parametro y cambia el estado a ocupado, exito 1, fracaso 0
-int buscar_paginas_memoria(int pid, int cant_paginas){
-	int i;
-	for (i = 0; Memoria_principal[i].estado == 'O'; i++){
-		if (Memoria_principal[i+1].estado != 'D' && Memoria_principal[i+1].estado != 'O'){
-			return 0;
-		}
-	}
-	Memoria_principal[i].estado = 'O';
-	Memoria_principal[i].id_proceso = pid;
-	cant_paginas--;
-	if(cant_paginas > 0){
-		if (buscar_paginas_memoria(pid, cant_paginas) == 0){
-			Memoria_principal[i].estado = 'D';
-			Memoria_principal[i].id_proceso = 0;
-			return 0;
-		}
-	}
-	return 1;
-}
+
 
 void liberar_espacio_memoria(int pid){
 	int i = 0;
 	while (Memoria_principal[i].estado == 'D' || Memoria_principal[i].estado == 'O'){
 		if(Memoria_principal[i].id_proceso == pid){
 			Memoria_principal[i].estado = 'D';
+			Memoria_principal[i].id_proceso = 0;
 			printf("PROCESO %d LIBERO ESPACIO %d \n", pid, i);
 		}
 		i++;
@@ -132,6 +114,91 @@ void prueba(int pid){
 		i++;
 	}
 }
+
+
+
+//regresa 1 si despues de Memoria_principal[index], hay suficientes espacios vacios continuos para completar los espacios por segmento
+//regresa -1 si se acabó la memoria
+//regresa 0 si no encontró espacio pero aun queda memoria
+int validar_espacios_suficientes_segmento(int index, int espacios_mem_x_segmento){
+	while (espacios_mem_x_segmento > 0){
+		
+		if (Memoria_principal[index].estado == 'D'){
+			espacios_mem_x_segmento--;  index++;
+		}
+		
+		else if (Memoria_principal[index].estado == 'O'){
+			return 0;
+		}
+		
+		else if (Memoria_principal[index+1].estado != 'D' && Memoria_principal[index+1].estado != 'O'){
+			return -1;
+		}
+		
+	}
+	return 1;
+}
+
+//busca la cantidad de espacios de memoria x segmento indicada por parametro, las asgina al pid de parametro y cambia el estado a ocupado, exito 1, fracaso 0
+int buscar_segmentos_memoria(int pid, int index, int cant_segmentos, int espacios_mem_x_segmento){
+	int i = index;
+	for (i = index; Memoria_principal[i].estado == 'O'; i++){
+		if (Memoria_principal[i+1].estado != 'D' && Memoria_principal[i+1].estado != 'O'){
+			return 0;
+		}
+	}
+	//en este punto, estoy hubicado en un indice de la memoria principal con estado desocupado
+	int temp = validar_espacios_suficientes_segmento(i, espacios_mem_x_segmento);
+	if (temp == 1){
+		for(int insert = espacios_mem_x_segmento; insert > 0; insert--){
+			Memoria_principal[i].id_proceso = pid;
+			Memoria_principal[i].estado = 'O';
+			i++;
+		}
+	}
+	else if (temp == -1){
+		return 0;
+	}
+	
+	else{
+		return ( buscar_segmentos_memoria(pid, i+1, cant_segmentos, espacios_mem_x_segmento) );
+	}
+	
+	cant_segmentos--;
+	if (cant_segmentos > 0){
+		if (buscar_segmentos_memoria(pid, i, cant_segmentos, espacios_mem_x_segmento) == 0){
+			liberar_espacio_memoria(pid);
+			return 0;
+		}
+	}
+	
+	return 1;
+}
+
+
+
+//busca la cantidad de paginas indicada por parametro, las asgina al pid de parametro y cambia el estado a ocupado, exito 1, fracaso 0
+int buscar_paginas_memoria(int pid, int cant_paginas){
+	int i;
+	for (i = 0; Memoria_principal[i].estado == 'O'; i++){
+		if (Memoria_principal[i+1].estado != 'D' && Memoria_principal[i+1].estado != 'O'){
+			return 0;
+		}
+	}  
+	//en este punto, estoy hubicado en un indice de la memoria principal con estado desocupado
+	Memoria_principal[i].estado = 'O';
+	Memoria_principal[i].id_proceso = pid;
+	cant_paginas--;
+	if(cant_paginas > 0){
+		if (buscar_paginas_memoria(pid, cant_paginas) == 0){
+			Memoria_principal[i].estado = 'D';
+			Memoria_principal[i].id_proceso = 0;
+			return 0;
+		}
+	}
+	return 1;
+}
+
 
 /*
  ========================================================================================================================
@@ -211,7 +278,85 @@ void *proceso_buscador_paginas(void *args){
  ========================================================================================================================
  ========================================================================================================================
  */
+void *proceso_buscador_segmentos(void *args){
+	struct hilo pb;
+	pb.cancelado = 0;
+	pb.id = pthread_self();
+	pb.estado = 'B';
+	int index_personal;
+	esperarSemaforo(0);	
+	if(!Memoria_secundaria[0].cancelado){
+		index_personal = index_mem_secundaria;
+		Memoria_secundaria[index_personal] = pb;
+		index_mem_secundaria++;
+		aumentarSemaforo(0);
+	}
+	else{
+		aumentarSemaforo(0);
+		pthread_exit((void *)0);
+	}
+	
+	pid_t temp = pthread_self();    
+	
+		
+	int dormir, cant_segmentos, espacios_mem_x_segmento;
+	//random entre 1 y 5
+	cant_segmentos = rand() % (5+1-1) + 1;
+	//random entre 20 y 60
+	dormir = rand() % (60+1-20) + 20;
+	//random entre 1 y 3
+	espacios_mem_x_segmento = rand() % (3+1-1) + 1;
+	
+	printf("PROCESO %d HE SIDO CREADO Y OCUPA %d SEGMENTOS y %d ESPACIOS\n", temp, cant_segmentos, espacios_mem_x_segmento);
+	//buscar espacio en memoria
+	if(!Memoria_secundaria[index_personal].cancelado){
+		esperarSemaforo(1); 
+		Memoria_secundaria[index_personal].estado = 'M';
+		
+		
+		if (buscar_segmentos_memoria((int)pthread_self(), 0, cant_segmentos, espacios_mem_x_segmento) != 1){	
+			//******************ESCRIBIR EN BITACORA QUE NO HABIA CAMPO******************
+			printf("PROCESO %d NO HABIA CAMPO \n", temp);
+			Memoria_secundaria[index_personal].estado = 'F';
+			aumentarSemaforo(1);
+			pthread_exit((void *)0);
+		};
+		
 
+		//******************ESCRIBIR EN BITACORA QUE ENTRÓ Y AGARRO LOS ESPACIOS QUE TIENEN EL PID DE EL******************
+		prueba((int)pthread_self());
+		aumentarSemaforo(1);
+	}
+	
+	Memoria_secundaria[index_personal].estado = 'S';
+	//ciclo para dormir el tiempo indicado por el random
+	printf("PROCESO %d DORMIRA %d \n", temp, dormir);
+	while(dormir > 0 && !Memoria_secundaria[index_personal].cancelado){
+		sleep(1);
+		dormir--;
+	}
+	
+	//liberar espacio de memoria
+	Memoria_secundaria[index_personal].estado = 'B';
+	if(!Memoria_secundaria[index_personal].cancelado){
+		esperarSemaforo(1); 
+		liberar_espacio_memoria((int)pthread_self());
+		aumentarSemaforo(1);
+	}
+	
+	printf("PROCESO %d TERMINO SU EJECUCION \n", temp);
+	Memoria_secundaria[index_personal].estado = 'T';
+	pthread_exit((void *)0);
+}
+
+
+/*
+ ========================================================================================================================
+ ========================================================================================================================
+ ========================================================================================================================
+ */
+ 
+ 
 void *creador_procesos(void *args){
 	//guardo el registro de este hilo en la memoria secundaria, el espacio 0 es reservado solo para él
 	struct hilo cp;
@@ -220,19 +365,30 @@ void *creador_procesos(void *args){
 	cp.estado = 'Z';
 	Memoria_secundaria[0] = cp;
 	
+	char *tipo_algoritmo = (char*)args;
+	
+	
 	int dormir;
 	//ciclo que se ejecuta mientras Finalizador no le ponga cancelado en 1
 	while(!Memoria_secundaria[0].cancelado){
 		
 		//crear procesos
 		pthread_t proceso_buscador_thread;
-		if(pthread_create(&proceso_buscador_thread, NULL, proceso_buscador_paginas, (void *)0)){
-			printf("Error creando el hilo de proceso_buscador.\n");
+		
+		if(tipo_algoritmo[0] == 'S'){	//para segmentacion
+			if(pthread_create(&proceso_buscador_thread, NULL, proceso_buscador_segmentos, (void *)0)){
+				printf("Error creando el hilo de proceso_buscador por segmentacion.\n");
+			}
+		}
+		else{						   //para paginacion
+			if(pthread_create(&proceso_buscador_thread, NULL, proceso_buscador_paginas, (void *)0)){
+				printf("Error creando el hilo de proceso_buscador por paginacion.\n");
+			}
 		}
 		add(&cola_procesos_primero, &cola_procesos_ultimo, proceso_buscador_thread);
-		
 		//random entre 30 y 60
 		dormir = rand() % (20+1-10) + 10;
+		//dormir = rand() % (60+1-30) + 30;
 		printf("**creador dormira %d \n", dormir);
 
 		while(!Memoria_secundaria[0].cancelado && dormir > 0){
@@ -345,7 +501,7 @@ int main(int argc, char* argv[]){
 	aumentarSemaforo(1);
 	
 	pthread_t creador_procesos_thread;
-	if(pthread_create(&creador_procesos_thread, NULL, creador_procesos, (void *)0)){
+	if(pthread_create(&creador_procesos_thread, NULL, creador_procesos, (void *)modo_ejecucion)){
 		printf("Error creando el hilo de creacion de procesos.\n");
 	}
 	
