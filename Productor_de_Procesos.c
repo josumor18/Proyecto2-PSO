@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
@@ -93,16 +94,26 @@ void esperarSemaforo(int indice_semaforo){
 
 
 
-void liberar_espacio_memoria(int pid){
+char * liberar_espacio_memoria(int pid){
 	int i = 0;
+	char * espacios = "";
 	while (Memoria_principal[i].estado == 'D' || Memoria_principal[i].estado == 'O'){
 		if(Memoria_principal[i].id_proceso == pid){
 			Memoria_principal[i].estado = 'D';
 			Memoria_principal[i].id_proceso = 0;
 			printf("PROCESO %d LIBERO ESPACIO %d \n", pid, i);
+			
+			char * aux = malloc(16);
+			snprintf(aux, 16, "%d,", i);
+			char * esp_copia = malloc(1 + strlen(espacios));
+			strcpy(esp_copia, espacios);
+			espacios = malloc(1 + strlen(aux) + strlen(esp_copia));
+			strcpy(espacios, esp_copia);
+			strcat(espacios, aux);
 		}
 		i++;
 	}
+	return espacios;
 }
 
 void prueba(int pid){
@@ -177,7 +188,7 @@ int buscar_segmentos_memoria(int pid, int index, int cant_segmentos, int espacio
 
 
 
-//busca la cantidad de paginas indicada por parametro, las asgina al pid de parametro y cambia el estado a ocupado, exito 1, fracaso 0
+//busca la cantidad de paginas indicada por parametro, las asigna al pid de parametro y cambia el estado a ocupado, exito 1, fracaso 0
 int buscar_paginas_memoria(int pid, int cant_paginas){
 	int i;
 	for (i = 0; Memoria_principal[i].estado == 'O'; i++){
@@ -185,7 +196,7 @@ int buscar_paginas_memoria(int pid, int cant_paginas){
 			return 0;
 		}
 	}  
-	//en este punto, estoy hubicado en un indice de la memoria principal con estado desocupado
+	//en este punto, estoy ubicado en un indice de la memoria principal con estado desocupado
 	Memoria_principal[i].estado = 'O';
 	Memoria_principal[i].id_proceso = pid;
 	cant_paginas--;
@@ -199,7 +210,34 @@ int buscar_paginas_memoria(int pid, int cant_paginas){
 	return 1;
 }
 
+char* getEspaciosPorProceso(int pid){
+	int i = 0;
+	char * espacios = "";
+	while(Memoria_principal[i].estado == 'D' || Memoria_principal[i].estado == 'O'){
+		if(Memoria_principal[i].id_proceso == pid){
+			char * aux = malloc(16);
+			snprintf(aux, 16, "%d,", i);
+			char * esp_copia = malloc(1 + strlen(espacios));
+			strcpy(esp_copia, espacios);
+			espacios = malloc(1 + strlen(aux) + strlen(esp_copia));
+			strcpy(espacios, esp_copia);
+			strcat(espacios, aux);
+		}
+		i++;
+	}
+	//printf("\nEspacios: %s\n", espacios);
+	return espacios;
+}
 
+char * getFechaHora(){
+	time_t tiempo = time(0);
+    struct tm *tlocal = localtime(&tiempo);
+    char output[128];
+    strftime(output,128,"%d/%m/%y %H:%M:%S",tlocal);
+    char * output_pointer = (char *)malloc(129);
+    strcpy(output_pointer, output);
+    return output_pointer;
+}
 /*
  ========================================================================================================================
  ========================================================================================================================
@@ -239,14 +277,17 @@ void *proceso_buscador_paginas(void *args){
 	if(!Memoria_secundaria[index_personal].cancelado){
 		esperarSemaforo(1); 
 		Memoria_secundaria[index_personal].estado = 'M';
+		//fprintf(log_file, "%d\tburcar espacio\t-----\tfecha,hora\t-----\n", temp);
 		if (buscar_paginas_memoria((int)pthread_self(), cant_paginas) != 1){	
-			//******************ESCRIBIR EN BITACORA QUE NO HABIA CAMPO******************
 			printf("PROCESO %d NO HABIA CAMPO \n", temp);
 			Memoria_secundaria[index_personal].estado = 'F';
+			//******************ESCRIBIR EN BITACORA QUE NO HABIA CAMPO******************
+			//fprintf(log_file, "%d\tMorir\tNA\tfecha,hora\tNA\n", temp);
 			aumentarSemaforo(1);
 			pthread_exit((void *)0);
 		};
 		//******************ESCRIBIR EN BITACORA QUE ENTRÓ Y AGARRO LOS ESPACIOS QUE TIENEN EL PID DE EL******************
+		fprintf(log_file, "%d\tAsignación\t%s\t%s\n", temp, getFechaHora(), getEspaciosPorProceso(temp));
 		prueba((int)pthread_self());
 		aumentarSemaforo(1);
 	}
@@ -263,7 +304,9 @@ void *proceso_buscador_paginas(void *args){
 	Memoria_secundaria[index_personal].estado = 'B';
 	if(!Memoria_secundaria[index_personal].cancelado){
 		esperarSemaforo(1); 
-		liberar_espacio_memoria((int)pthread_self());
+		char * espacios = liberar_espacio_memoria((int)pthread_self());
+		//******************ESCRIBIR EN BITACORA QUE LIBERÓ LOS ESPACIOS QUE TIENÍA ASIGNADOS******************
+		fprintf(log_file, "%d\tDesasignación\t%s\t%s\n", temp, getFechaHora(), espacios);
 		aumentarSemaforo(1);
 	}
 	
@@ -324,6 +367,7 @@ void *proceso_buscador_segmentos(void *args){
 		
 
 		//******************ESCRIBIR EN BITACORA QUE ENTRÓ Y AGARRO LOS ESPACIOS QUE TIENEN EL PID DE EL******************
+		fprintf(log_file, "%d\tAsignación\t%s\t%s\n", temp, getFechaHora(), getEspaciosPorProceso(temp));
 		prueba((int)pthread_self());
 		aumentarSemaforo(1);
 	}
@@ -340,7 +384,10 @@ void *proceso_buscador_segmentos(void *args){
 	Memoria_secundaria[index_personal].estado = 'B';
 	if(!Memoria_secundaria[index_personal].cancelado){
 		esperarSemaforo(1); 
-		liberar_espacio_memoria((int)pthread_self());
+		char * espacios = liberar_espacio_memoria((int)pthread_self());
+		//******************ESCRIBIR EN BITACORA QUE LIBERÓ LOS ESPACIOS QUE TIENÍA ASIGNADOS******************
+		fprintf(log_file, "%d\tDesasignación\t%s\t%s\n", temp, getFechaHora(), espacios);
+		
 		aumentarSemaforo(1);
 	}
 	
@@ -494,7 +541,7 @@ int main(int argc, char* argv[]){
 		printf("\n- No se ha podido crear el archivo de bitacora\n\n");
 	}else{
 		printf("\nArchivo de bitacora creado\n\n");
-		fprintf(log_file, "Bitacora\nInicio de la ejecución: [fecha y hora]\n\nPID\tACCIÓN\tTIPO\tFecha y hora\tEspacio asignado\n");
+		fprintf(log_file, "Bitacora\nInicio de la ejecución: %s\n\nPID\t\tTIPO\t\tFecha y hora\t\tEspacio asignado\n", getFechaHora());
 	}
 	
 	aumentarSemaforo(0);
@@ -508,7 +555,7 @@ int main(int argc, char* argv[]){
 	pthread_join(creador_procesos_thread, NULL); 
 	
 	//mientras hayan elementos en la cola, les hago join y los saco
-	while(isVacio(&cola_procesos_primero, &cola_procesos_ultimo) == 1){     
+	while(isVacio(&cola_procesos_primero, &cola_procesos_ultimo) == 1){
 		pthread_join( leer(&cola_procesos_primero, &cola_procesos_ultimo), NULL);
 	}
 
