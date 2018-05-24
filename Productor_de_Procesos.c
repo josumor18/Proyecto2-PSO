@@ -541,7 +541,7 @@ int main(int argc, char* argv[]){
 		printf("\n- No se ha podido crear el archivo de bitacora\n\n");
 	}else{
 		printf("\nArchivo de bitacora creado\n\n");
-		fprintf(log_file, "Bitacora\nInicio de la ejecución: %s\n\nPID\t\tTIPO\t\tFecha y hora\t\tEspacio asignado\n", getFechaHora());
+		fprintf(log_file, "Bitacora\nInicio de la ejecución: %s\n\nPID\t\tTIPO\t\tFecha y hora\t\tEspacio asignado/desasignado\n", getFechaHora());
 	}
 	
 	aumentarSemaforo(0);
