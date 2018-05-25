@@ -272,6 +272,7 @@ void *proceso_buscador_paginas(void *args){
 	//random entre 20 y 60
 	dormir = rand() % (60+1-20) + 20;
 	
+	fprintf(log_file, "%d\tCreación\t%s\tNA\n", temp, getFechaHora());
 	printf("PROCESO %d HE SIDO CREADO Y OCUPA %d PAGINAS\n", temp, cant_paginas);
 	//buscar espacio en memoria
 	if(!Memoria_secundaria[index_personal].cancelado){
@@ -350,6 +351,7 @@ void *proceso_buscador_segmentos(void *args){
 	//random entre 1 y 3
 	espacios_mem_x_segmento = rand() % (3+1-1) + 1;
 	
+	fprintf(log_file, "%d\tCreación\t%s\tNA\n", temp, getFechaHora());
 	printf("PROCESO %d HE SIDO CREADO Y OCUPA %d SEGMENTOS y %d ESPACIOS\n", temp, cant_segmentos, espacios_mem_x_segmento);
 	//buscar espacio en memoria
 	if(!Memoria_secundaria[index_personal].cancelado){
