@@ -1,0 +1,13 @@
+Bitacora
+Modo de ejecución: SEGMENTACIÓN
+Inicio de la ejecución: 25/05/18 16:21:21
+
+PID		TIPO		Fecha y hora		Espacio asignado/desasignado
+-409102592	Muerte		25/05/18 16:21:21	NA
+-419686656	Asignación	25/05/18 16:21:31	0,1,2,3,4,5,
+-428079360	Asignación	25/05/18 16:21:41	6,7,8,9,
+-436472064	Muerte		25/05/18 16:21:54	NA
+-444864768	Muerte		25/05/18 16:22:06	NA
+-428079360	Desasignación	25/05/18 16:22:23	6,7,8,9,
+-453257472	Muerte		25/05/18 16:22:23	NA
+-419686656	Desasignación	25/05/18 16:22:30	0,1,2,3,4,5,
