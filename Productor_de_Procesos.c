@@ -272,17 +272,18 @@ void *proceso_buscador_paginas(void *args){
 	//random entre 20 y 60
 	dormir = rand() % (60+1-20) + 20;
 	
+	fprintf(log_file, "%d\tCreación\t%s\tNA\n", temp, getFechaHora());
 	printf("PROCESO %d HE SIDO CREADO Y OCUPA %d PAGINAS\n", temp, cant_paginas);
 	//buscar espacio en memoria
 	if(!Memoria_secundaria[index_personal].cancelado){
 		esperarSemaforo(1); 
 		Memoria_secundaria[index_personal].estado = 'M';
-		//fprintf(log_file, "%d\tburcar espacio\t-----\tfecha,hora\t-----\n", temp);
+		//fprintf(log_file, "%d\tbuscar espacio\t-----\tfecha,hora\t-----\n", temp);
 		if (buscar_paginas_memoria((int)pthread_self(), cant_paginas) != 1){	
 			printf("PROCESO %d NO HABIA CAMPO \n", temp);
 			Memoria_secundaria[index_personal].estado = 'F';
 			//******************ESCRIBIR EN BITACORA QUE NO HABIA CAMPO******************
-			//fprintf(log_file, "%d\tMorir\tNA\tfecha,hora\tNA\n", temp);
+			fprintf(log_file, "%d\tMuerte\t\t%s\tNA\n", temp, getFechaHora());
 			aumentarSemaforo(1);
 			pthread_exit((void *)0);
 		};
@@ -350,6 +351,7 @@ void *proceso_buscador_segmentos(void *args){
 	//random entre 1 y 3
 	espacios_mem_x_segmento = rand() % (3+1-1) + 1;
 	
+	fprintf(log_file, "%d\tCreación\t%s\tNA\n", temp, getFechaHora());
 	printf("PROCESO %d HE SIDO CREADO Y OCUPA %d SEGMENTOS y %d ESPACIOS\n", temp, cant_segmentos, espacios_mem_x_segmento);
 	//buscar espacio en memoria
 	if(!Memoria_secundaria[index_personal].cancelado){
@@ -359,6 +361,7 @@ void *proceso_buscador_segmentos(void *args){
 		
 		if (buscar_segmentos_memoria((int)pthread_self(), 0, cant_segmentos, espacios_mem_x_segmento) != 1){	
 			//******************ESCRIBIR EN BITACORA QUE NO HABIA CAMPO******************
+			fprintf(log_file, "%d\tMuerte\t\t%s\tNA\n", temp, getFechaHora());
 			printf("PROCESO %d NO HABIA CAMPO \n", temp);
 			Memoria_secundaria[index_personal].estado = 'F';
 			aumentarSemaforo(1);
@@ -541,7 +544,14 @@ int main(int argc, char* argv[]){
 		printf("\n- No se ha podido crear el archivo de bitacora\n\n");
 	}else{
 		printf("\nArchivo de bitacora creado\n\n");
-		fprintf(log_file, "Bitacora\nInicio de la ejecución: %s\n\nPID\t\tTIPO\t\tFecha y hora\t\tEspacio asignado/desasignado\n", getFechaHora());
+		fprintf(log_file, "Bitacora\n");
+		if(*modo_ejecucion == 'P'){
+			fprintf(log_file, "Modo de ejecución: PAGINACIÓN");
+		}else if(*modo_ejecucion == 'S'){
+			fprintf(log_file, "Modo de ejecución: SEGMENTACIÓN");
+		}
+		fprintf(log_file, "\nInicio de la ejecución: %s", getFechaHora());
+		fprintf(log_file, "\n\nPID\t\tTIPO\t\tFecha y hora\t\tEspacio asignado/desasignado\n");
 	}
 	
 	aumentarSemaforo(0);
